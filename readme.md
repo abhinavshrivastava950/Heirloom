@@ -128,8 +128,8 @@ cargo install --locked stellar-cli --features opt
 ### Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/heirloom-contract.git
-cd heirloom-contract
+git clone https://github.com/abhinavshrivastava950/Heirloom.git
+cd Heirloom
 ```
 
 ### Build Contract
