@@ -139,7 +139,7 @@ export default function HeirloomPage() {
       }).addOperation(contract.call("get_info")).setTimeout(30).build();
 
       const simulated = await server.simulateTransaction(tx);
-      if (SorobanRpc.isSimulationError(simulated) || !simulated.result) {
+      if (!simulated.result || simulated.error) {
         throw new Error('Contract not initialized.');
       }
       
@@ -197,7 +197,7 @@ export default function HeirloomPage() {
 
       const simulated = await server.simulateTransaction(tx);
 
-      if (SorobanRpc.isSimulationError(simulated)) {
+      if (!simulated.result || simulated.error) {
         throw new Error("Transaction simulation failed: " + (simulated.error || "Unknown error"));
       }
 
@@ -212,13 +212,13 @@ export default function HeirloomPage() {
       let txResponse = await server.getTransaction(sendResponse.hash);
 
       let waitTries = 10;
-      while (txResponse.status === SorobanRpc.GetTransactionStatus.NOT_FOUND && waitTries > 0) {
+      while (txResponse.status === 'NOT_FOUND' && waitTries > 0) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         txResponse = await server.getTransaction(sendResponse.hash);
         waitTries--;
       }
 
-      if (txResponse.status === SorobanRpc.GetTransactionStatus.SUCCESS) {
+      if (txResponse.status === 'SUCCESS') {
         toast.dismiss(toastId);
         toast.success("Transaction successful!");
         await getContractStatus(publicKey);
@@ -246,7 +246,7 @@ export default function HeirloomPage() {
     const ownerArg = nativeToScVal(Address.fromString(publicKey), { type: "address" });
     const beneficiaryArg = nativeToScVal(Address.fromString(beneficiary), { type: "address" });
     const periodArg = nativeToScVal(parseInt(checkInPeriod), { type: "u64" });
-    const tokenArg = nativeToScVal(Address.contract(Buffer.from(NATIVE_TOKEN_ID, 'hex')), { type: "address" });
+    const tokenArg = nativeToScVal(Address.fromString(NATIVE_TOKEN_ID), { type: "address" });
 
     await invokeContract("initialize", [ownerArg, beneficiaryArg, periodArg, tokenArg], "Initializing...");
   };
