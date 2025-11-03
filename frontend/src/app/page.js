@@ -73,22 +73,34 @@ export default function HeirloomPage() {
         throw new Error("Please open this application in a web browser.");
       }
 
-      // Wait a bit for Freighter to inject itself
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Check if Freighter is installed
-      if (!window.freighter) {
-        throw new Error("Freighter wallet extension not detected. Please:\n1. Install Freighter from https://www.freighter.app/\n2. Open this app in Chrome/Brave/Edge (NOT in VS Code browser)\n3. Make sure the extension is enabled");
+      // Try to directly call requestAccess without checking window.freighter
+      // The Freighter API should work even if window.freighter is undefined
+      let result;
+      try {
+        // Request access - in v5, this returns an object {address: "G..."}
+        result = await requestAccess();
+      } catch (accessError) {
+        // If requestAccess fails, Freighter is truly not installed
+        console.error("Request access error:", accessError);
+        throw new Error("Freighter wallet is not installed or not accessible.\n\nPlease:\n1. Install Freighter from https://www.freighter.app/\n2. Refresh the page after installation\n3. Make sure you're using Chrome/Brave/Edge\n4. Check that the extension is enabled in chrome://extensions/");
       }
 
-      // Request access - this returns the public key directly
-      const pubKey = await requestAccess();
+      // Extract the public key from the result
+      const pubKey = typeof result === 'string' ? result : result?.address;
+      
       if (!pubKey) {
-        throw new Error("Failed to get access to Freighter. Please approve the connection request.");
+        throw new Error("Failed to get public key from Freighter. Please approve the connection request.");
       }
 
       // Get network details
-      const networkDetails = await getNetworkDetails();
+      let networkDetails;
+      try {
+        networkDetails = await getNetworkDetails();
+      } catch (networkError) {
+        console.error("Network details error:", networkError);
+        throw new Error("Failed to get network details. Please make sure Freighter is unlocked.");
+      }
+
       const network = networkDetails.network;
       
       if (network !== 'TESTNET') {
@@ -274,22 +286,25 @@ export default function HeirloomPage() {
       setTimeout(async () => {
         try {
           if (typeof window !== 'undefined') {
-            const hasFreighter = !!window.freighter;
-            setFreighterDetected(hasFreighter);
-            
-            if (hasFreighter) {
-              // Check if already allowed/connected
+            // Try to check if already allowed using setAllowed
+            try {
               const isAllowed = await setAllowed();
+              setFreighterDetected(true); // If setAllowed works, Freighter is installed
+              
               if (isAllowed) {
                 connectWallet();
               }
+            } catch (error) {
+              // If setAllowed throws, Freighter might not be installed
+              console.log("Freighter detection error:", error);
+              setFreighterDetected(false);
             }
           }
         } catch (error) {
           console.log("Freighter check error:", error);
           setFreighterDetected(false);
         }
-      }, 500);
+      }, 800); // Increased timeout to give extension more time to load
     };
     checkConnection();
   }, [connectWallet]);
