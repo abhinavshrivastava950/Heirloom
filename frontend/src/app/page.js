@@ -198,7 +198,14 @@ export default function HeirloomPage() {
       const simulated = await server.simulateTransaction(tx);
 
       if (!simulated.result || simulated.error) {
-        throw new Error("Transaction simulation failed: " + (simulated.error || "Unknown error"));
+        const errorMsg = simulated.error ? JSON.stringify(simulated.error) : "Unknown error";
+        
+        // Check if it's a contract not initialized error
+        if (errorMsg.includes("UnreachableCodeReached") || errorMsg.includes("InvalidAction")) {
+          throw new Error("Contract not initialized. Please initialize the contract first before making deposits.");
+        }
+        
+        throw new Error("Transaction simulation failed: " + errorMsg);
       }
 
       const prepared = SorobanRpc.assembleTransaction(tx, simulated);
@@ -384,7 +391,15 @@ export default function HeirloomPage() {
             <CardHeader><CardTitle>Contract Status</CardTitle></CardHeader>
             <CardContent>
               {loadingStatus && <p>Loading status...</p>}
-              {!loadingStatus && !status && <p>Contract not yet initialized.</p>}
+              {!loadingStatus && !status && (
+                <Alert className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Contract Not Initialized</AlertTitle>
+                  <AlertDescription>
+                    Please initialize the contract first by filling in the beneficiary address and check-in period below, then clicking "Initialize".
+                  </AlertDescription>
+                </Alert>
+              )}
               {status && (
                 <div className="space-y-2 font-mono text-sm">
                   <p><strong>Balance:</strong> {status.balance} XLM</p>
@@ -424,13 +439,23 @@ export default function HeirloomPage() {
                 <CardDescription>Set the owner, beneficiary, and check-in period.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Owner:</strong> Your connected wallet ({publicKey?.slice(0, 8)}...)
+                    <br />
+                    <strong>Beneficiary:</strong> Enter a different Stellar address below who will inherit the assets.
+                  </AlertDescription>
+                </Alert>
                 <div>
-                  <Label htmlFor="beneficiary">Beneficiary Address</Label>
-                  <Input id="beneficiary" placeholder="G..." value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} disabled={isSubmitting || !!status} />
+                  <Label htmlFor="beneficiary">Beneficiary Address (starts with G)</Label>
+                  <Input id="beneficiary" placeholder="GXXXXXXX..." value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} disabled={isSubmitting || !!status} />
+                  <p className="text-xs text-muted-foreground mt-1">This is the person who will inherit your assets if you don't check in.</p>
                 </div>
                 <div>
                   <Label htmlFor="period">Check-In Period (seconds)</Label>
                   <Input id="period" type="number" value={checkInPeriod} onChange={(e) => setCheckInPeriod(e.target.value)} disabled={isSubmitting || !!status} />
+                  <p className="text-xs text-muted-foreground mt-1">Default: 300 seconds (5 minutes for testing). Use 86400 for 1 day, 604800 for 1 week.</p>
                 </div>
                 <Button onClick={handleInitialize} disabled={isSubmitting || !!status}>
                   <LogIn className="h-4 w-4 mr-2" /> Initialize
