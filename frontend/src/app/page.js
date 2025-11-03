@@ -4,11 +4,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
-  isConnected,
+  setAllowed,
+  requestAccess,
   getPublicKey,
   signTransaction,
-  requestAccess,
-  getNetwork
+  getNetworkDetails
 } from '@stellar/freighter-api';
 
 // Import from @stellar/stellar-sdk v12
@@ -81,23 +81,22 @@ export default function HeirloomPage() {
         throw new Error("Freighter wallet extension not detected. Please:\n1. Install Freighter from https://www.freighter.app/\n2. Open this app in Chrome/Brave/Edge (NOT in VS Code browser)\n3. Make sure the extension is enabled");
       }
 
-      const accessGranted = await requestAccess();
-      if (!accessGranted) {
-        throw new Error("Access to Freighter was denied. Please approve the connection request.");
-      }
-
-      const pubKey = await getPublicKey();
+      // Request access - this returns the public key directly
+      const pubKey = await requestAccess();
       if (!pubKey) {
-        throw new Error("Failed to get public key. Please unlock your Freighter wallet.");
+        throw new Error("Failed to get access to Freighter. Please approve the connection request.");
       }
 
-      const net = await getNetwork();
-      if (net !== 'TESTNET') {
+      // Get network details
+      const networkDetails = await getNetworkDetails();
+      const network = networkDetails.network;
+      
+      if (network !== 'TESTNET') {
         throw new Error("Please switch Freighter to TESTNET network!");
       }
 
       setPublicKey(pubKey);
-      setNetwork(net);
+      setNetwork(network);
       setIsConnected(true);
       toast.success("Wallet connected successfully!");
       getContractStatus(pubKey); // Fetch status immediately after connect
@@ -192,8 +191,8 @@ export default function HeirloomPage() {
 
       const prepared = SorobanRpc.assembleTransaction(tx, simulated);
       const signedXdr = await signTransaction(prepared.toXDR(), { 
-        network: "TESTNET",
-        networkPassphrase: NETWORK_PASSPHRASE 
+        networkPassphrase: NETWORK_PASSPHRASE,
+        accountToSign: publicKey
       });
       const signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
 
@@ -279,8 +278,9 @@ export default function HeirloomPage() {
             setFreighterDetected(hasFreighter);
             
             if (hasFreighter) {
-              const connected = await isConnected();
-              if (connected) {
+              // Check if already allowed/connected
+              const isAllowed = await setAllowed();
+              if (isAllowed) {
                 connectWallet();
               }
             }
