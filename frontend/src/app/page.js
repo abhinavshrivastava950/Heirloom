@@ -3,9 +3,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import * as FreighterApi from '@stellar/freighter-api';
+import {
+  isConnected,
+  getPublicKey,
+  signTransaction,
+  requestAccess,
+  getNetwork
+} from '@stellar/freighter-api';
 
-// Import from @stellar/stellar-sdk v13
+// Import from @stellar/stellar-sdk v12
 import * as StellarSdk from '@stellar/stellar-sdk';
 
 const {
@@ -52,6 +58,7 @@ export default function HeirloomPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [publicKey, setPublicKey] = useState('');
   const [network, setNetwork] = useState('');
+  const [freighterDetected, setFreighterDetected] = useState(true); // Assume true initially to avoid hydration mismatch
 
   // Form inputs
   const [beneficiary, setBeneficiary] = useState('');
@@ -61,28 +68,41 @@ export default function HeirloomPage() {
   // --- Wallet Connection ---
   const connectWallet = useCallback(async () => {
     try {
-      const isInstalled = await FreighterApi.isInstalled();
-      if (!isInstalled) {
-        throw new Error("Freighter wallet not found. Please install it.");
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined') {
+        throw new Error("Please open this application in a web browser.");
       }
 
-      await FreighterApi.requestAccess();
-      const pubKey = await FreighterApi.getPublicKey();
+      // Wait a bit for Freighter to inject itself
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Check if Freighter is installed
+      if (!window.freighter) {
+        throw new Error("Freighter wallet extension not detected. Please:\n1. Install Freighter from https://www.freighter.app/\n2. Open this app in Chrome/Brave/Edge (NOT in VS Code browser)\n3. Make sure the extension is enabled");
+      }
+
+      const accessGranted = await requestAccess();
+      if (!accessGranted) {
+        throw new Error("Access to Freighter was denied. Please approve the connection request.");
+      }
+
+      const pubKey = await getPublicKey();
       if (!pubKey) {
-        throw new Error("Wallet connection failed. Please unlock Freighter.");
+        throw new Error("Failed to get public key. Please unlock your Freighter wallet.");
       }
 
-      const net = await FreighterApi.getNetwork();
+      const net = await getNetwork();
       if (net !== 'TESTNET') {
-        throw new Error("Please switch Freighter to TESTNET!");
+        throw new Error("Please switch Freighter to TESTNET network!");
       }
 
       setPublicKey(pubKey);
       setNetwork(net);
       setIsConnected(true);
-      toast.success("Wallet connected!");
+      toast.success("Wallet connected successfully!");
       getContractStatus(pubKey); // Fetch status immediately after connect
     } catch (error) {
+      console.error("Wallet connection error:", error);
       toast.error(error.message || "An unknown error occurred.");
     }
   }, []); // Add empty dependency array
@@ -171,7 +191,10 @@ export default function HeirloomPage() {
       }
 
       const prepared = SorobanRpc.assembleTransaction(tx, simulated);
-      const signedXdr = await FreighterApi.signTransaction(prepared.toXDR(), { network: "TESTNET" });
+      const signedXdr = await signTransaction(prepared.toXDR(), { 
+        network: "TESTNET",
+        networkPassphrase: NETWORK_PASSPHRASE 
+      });
       const signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
 
       const sendResponse = await server.sendTransaction(signedTx);
@@ -250,9 +273,21 @@ export default function HeirloomPage() {
     const checkConnection = async () => {
       // Give Freighter a moment to inject itself
       setTimeout(async () => {
-        const connected = await FreighterApi.isConnected();
-        if (connected) {
-          connectWallet();
+        try {
+          if (typeof window !== 'undefined') {
+            const hasFreighter = !!window.freighter;
+            setFreighterDetected(hasFreighter);
+            
+            if (hasFreighter) {
+              const connected = await isConnected();
+              if (connected) {
+                connectWallet();
+              }
+            }
+          }
+        } catch (error) {
+          console.log("Freighter check error:", error);
+          setFreighterDetected(false);
         }
       }, 500);
     };
@@ -265,6 +300,25 @@ export default function HeirloomPage() {
         <h1 className="text-4xl font-bold text-primary">🏛️ Heirloom Digital Will</h1>
         <p className="text-xl text-muted-foreground">Secure your legacy on the Stellar blockchain.</p>
       </div>
+
+      {!isConnected && !freighterDetected && (
+        <Alert className="mb-6" variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Freighter Extension Required</AlertTitle>
+          <AlertDescription>
+            <div className="space-y-2">
+              <p>To use this application, you need to:</p>
+              <ol className="list-decimal list-inside space-y-1 ml-2">
+                <li>Install the Freighter wallet extension from <a href="https://www.freighter.app/" target="_blank" rel="noopener noreferrer" className="underline font-semibold">freighter.app</a></li>
+                <li>Open this application in Chrome, Brave, or Edge browser (not in VS Code)</li>
+                <li>Make sure Freighter is set to <strong>TESTNET</strong> network</li>
+                <li>Have a funded testnet account</li>
+              </ol>
+              <p className="mt-2 text-sm">Current URL: <code className="bg-muted px-1 py-0.5 rounded">http://localhost:3000</code></p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card className="mb-6">
         <CardHeader><CardTitle>Wallet Connection</CardTitle></CardHeader>
