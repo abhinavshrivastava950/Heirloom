@@ -6,6 +6,8 @@
 [![Soroban](https://img.shields.io/badge/Soroban-Smart%20Contracts-purple)](https://soroban.stellar.org)
 [![Rust](https://img.shields.io/badge/Rust-1.75+-orange)](https://www.rust-lang.org)
 
+> 🎉 **NEW**: Frontend now includes **CLI Commands Tab** with copy-paste ready commands! Try it at http://localhost:3000
+
 ---
 
 ## 🎯 Problem Statement

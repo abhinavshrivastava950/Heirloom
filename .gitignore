@@ -8,3 +8,7 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+
+# Documentation (not for public repo)
+VIDEO_SCRIPT.md
+HACKATHON_DEMO_GUIDE.md
